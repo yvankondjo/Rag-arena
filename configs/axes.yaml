@@ -1,0 +1,30 @@
+# Total combinations: 2 * 3 * 2 = 12
+# Reranker is now orthogonal to retrieval modes
+# Doc-level indexing (no chunking)
+# Example runs:
+#   1. simple + dense + no_rerank
+#   2. simple + dense + rerank
+#   3. simple + keyword + no_rerank
+#   4. simple + keyword + rerank
+#   5. simple + hybrid + no_rerank
+#   6. simple + hybrid + rerank
+#   ... (12 total)
+
+orchestration:
+  description: "Orchestration mode: how to combine retrieval and generation"
+  modes:
+    - simple           # Single retrieve → generate
+    - agentic          # LangGraph with query rewriting, multi-step reasoning (max 3)
+
+retrieval:
+  description: "Retrieval mode: how to retrieve documents"
+  modes:
+    - dense            # Dense vector similarity (Chroma only)
+    - keyword          # Keyword search (BM25s only)
+    - hybrid           # Dense + BM25 with RRF fusion
+
+reranker:
+  description: "Whether to apply reranking after retrieval"
+  modes:
+    - "no_rerank"      # No reranking
+    - "rerank"         # Apply CrossEncoder reranking on top-k results

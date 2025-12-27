@@ -1,0 +1,23 @@
+# Base configuration for RAGBench-12x
+# This defines defaults; axes.yaml defines the grid dimensions
+
+# Dataset
+dataset_name: scifact
+dataset_split: test
+num_queries: null  # null = all queries; set to N for testing
+
+# Chunking
+chunk_size: 512
+chunk_overlap: 64
+
+# Retrieval
+top_k: 10
+top_k_bm25: 20      # for hybrid retrieval
+top_k_dense: 20     # for hybrid retrieval
+top_k_rerank: 10    # for reranking
+
+# Orchestration
+max_agentic_steps: 3
+
+# Model
+model: x-ai/grok-4.1-fast
