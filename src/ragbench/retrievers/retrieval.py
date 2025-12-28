@@ -18,26 +18,34 @@ def apply_reranker(result: RetrievalResult, query: str, reranker, top_k: int = 1
     Args:
         result: RetrievalResult to rerank
         query: Original query
-        reranker: Reranker instance (Cohere Client or CrossEncoder)
+        reranker: Reranker instance (Cohere ClientV2 or CrossEncoder)
         top_k: Number of results after reranking
 
     Returns:
-        Reranked RetrievalResult
+        Reranked RetrievalResult with reranking_latency_ms set
     """
     if reranker is None or not result.chunks:
         return result
 
     try:
         start_time = time.time()
-
-    
+        
+        # Cohere ClientV2 detection
         if hasattr(reranker, 'rerank'):
             documents = [chunk.text for chunk in result.chunks]
+            
+            # Use config model (rerank-v3.5 for reproducibility)
+            try:
+                from ragbench.config_benchmark import COHERE_RERANK_MODEL
+                model = COHERE_RERANK_MODEL
+            except ImportError:
+                model = "rerank-v3.5"
+            
             response = reranker.rerank(
                 query=query,
                 documents=documents,
                 top_n=top_k,
-                model="rerank-v4.0-fast"
+                model=model,
             )
 
             reranked = []
@@ -47,7 +55,7 @@ def apply_reranker(result: RetrievalResult, query: str, reranker, top_k: int = 1
                 reranked.append(original_chunk)
 
         else:
-            # SentenceTransformers CrossEncoder
+            # SentenceTransformers CrossEncoder (local, deterministic)
             pairs = [[query, chunk.text] for chunk in result.chunks]
             scores = reranker.predict(pairs, batch_size=32)
 
@@ -56,14 +64,15 @@ def apply_reranker(result: RetrievalResult, query: str, reranker, top_k: int = 1
                 chunk.score = float(score)
                 reranked.append(chunk)
 
-        latency_ms = (time.time() - start_time) * 1000
-        logger.debug(f"Reranking: {len(reranked)} results in {latency_ms:.1f}ms")
+        reranking_latency_ms = (time.time() - start_time) * 1000
+        logger.debug(f"Reranking: {len(reranked)} results in {reranking_latency_ms:.1f}ms")
 
         return RetrievalResult(
             chunks=reranked,
             query=query,
             retriever_type=f"{result.retriever_type}_reranked",
-            latency_ms=result.latency_ms + latency_ms,
+            latency_ms=result.latency_ms,  # Keep original retrieval latency
+            reranking_latency_ms=reranking_latency_ms,  # Separate reranking latency
         )
     except Exception as e:
         logger.error(f"Reranking failed: {e}", exc_info=True)

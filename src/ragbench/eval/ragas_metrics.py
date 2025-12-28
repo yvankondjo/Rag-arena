@@ -19,8 +19,6 @@ try:
     from ragas.metrics import (
         Faithfulness,
         AnswerRelevancy,
-        ContextPrecision,
-        ContextRecall,
     )
     from datasets import Dataset
     RAGAS_AVAILABLE = True
@@ -37,16 +35,24 @@ except ImportError:
 
 @dataclass
 class RagasResult:
-    """Result of Ragas evaluation."""
+    """Result of Ragas evaluation.
+    
+    Only Faithfulness and AnswerRelevancy are computed.
+    For retrieval quality, use BEIR metrics (NDCG, MRR, Recall)
+    which are based on document ID relevance judgments (qrels).
+    """
     faithfulness: float
     answer_relevancy: float
-    context_precision: float
-    context_recall: float
-    num_samples: int
+    num_samples: int = 0
 
 
-def _get_llm_and_embeddings():
+def _get_llm_and_embeddings(model: str = None):
     """Configure LLM and embeddings for RAGAS evaluation.
+    
+    FIX #7: Use the same model as generation for consistency.
+    
+    Args:
+        model: Model name to use (defaults to config_benchmark setting)
     
     Returns:
         Tuple of (llm, embeddings) or (None, None) if not available.
@@ -58,21 +64,27 @@ def _get_llm_and_embeddings():
         logger.warning("LangChain not available for RAGAS")
         return None, None
     
+    if model is None:
+        try:
+            from ragbench.config_benchmark import get_benchmark_config, RAGAS_TEMPERATURE
+            config = get_benchmark_config()
+            model = config.model if config.model else "gpt-4o-mini"
+        except ImportError:
+            model = "gpt-4o-mini"
+    
     try:
-
         openrouter_api_key = os.getenv("OPENROUTER_API_KEY")
         if openrouter_api_key:
             llm = ChatOpenAI(
-                model="gpt-4o-mini",
+                model=model,
                 api_key=openrouter_api_key,
                 base_url="https://openrouter.ai/api/v1",
                 temperature=0,
                 timeout=120,
                 max_retries=3,
             )
-            logger.info("RAGAS using OpenRouter LLM")
+            logger.info(f"RAGAS using OpenRouter LLM: {model}")
         
-
         openai_api_key = os.getenv("OPENAI_API_KEY")
         if openai_api_key:
             embeddings = OpenAIEmbeddings(
@@ -171,8 +183,6 @@ def evaluate_rag_with_ragas(
         return RagasResult(
             faithfulness=0.0,
             answer_relevancy=0.0,
-            context_precision=0.0,
-            context_recall=0.0,
             num_samples=len(questions),
         )
 
@@ -183,23 +193,12 @@ def evaluate_rag_with_ragas(
         "contexts": contexts,
     }
 
-    if ground_truths:
-        data["ground_truth"] = ground_truths
-
     dataset = Dataset.from_dict(data)
 
-
-
+    # Only Faithfulness and AnswerRelevancy (no ground_truth needed)
     faithfulness_metric = Faithfulness(llm=llm)
     answer_relevancy_metric = AnswerRelevancy(llm=llm, embeddings=embeddings) if embeddings else AnswerRelevancy(llm=llm)
-
     metrics = [faithfulness_metric, answer_relevancy_metric]
-
-
-    if ground_truths:
-        context_precision_metric = ContextPrecision(llm=llm)
-        context_recall_metric = ContextRecall(llm=llm)
-        metrics.extend([context_precision_metric, context_recall_metric])
 
 
     try:
@@ -212,24 +211,15 @@ def evaluate_rag_with_ragas(
 
     df = result.to_pandas()
     
+    faithfulness = df["faithfulness"].mean() if "faithfulness" in df.columns else 0.0
+    answer_relevancy = df["answer_relevancy"].mean() if "answer_relevancy" in df.columns else 0.0
 
-    available_columns = df.columns.tolist()
-    scores = {}
-    
-    for col in ["faithfulness", "answer_relevancy", "context_precision", "context_recall"]:
-        if col in available_columns:
-            scores[col] = df[col].mean()
-        else:
-            scores[col] = 0.0
-
-    logger.info(f"RAGAS evaluation completed: faithfulness={scores.get('faithfulness', 0):.3f}, "
-                f"answer_relevancy={scores.get('answer_relevancy', 0):.3f}")
+    logger.info(f"RAGAS evaluation completed: faithfulness={faithfulness:.3f}, "
+                f"answer_relevancy={answer_relevancy:.3f}")
 
     return RagasResult(
-        faithfulness=scores.get("faithfulness", 0.0),
-        answer_relevancy=scores.get("answer_relevancy", 0.0),
-        context_precision=scores.get("context_precision", 0.0),
-        context_recall=scores.get("context_recall", 0.0),
+        faithfulness=faithfulness,
+        answer_relevancy=answer_relevancy,
         num_samples=len(questions),
     )
 
@@ -261,8 +251,6 @@ def evaluate_single_query(
     return {
         "faithfulness": result.faithfulness,
         "answer_relevancy": result.answer_relevancy,
-        "context_precision": result.context_precision,
-        "context_recall": result.context_recall,
     }
 
 
@@ -279,8 +267,6 @@ def compute_ragas_aggregates(results: List[Dict[str, float]]) -> Dict[str, float
         return {
             "faithfulness_mean": 0.0,
             "answer_relevancy_mean": 0.0,
-            "context_precision_mean": 0.0,
-            "context_recall_mean": 0.0,
         }
 
     df = pd.DataFrame(results)
@@ -288,6 +274,4 @@ def compute_ragas_aggregates(results: List[Dict[str, float]]) -> Dict[str, float
     return {
         "faithfulness_mean": df["faithfulness"].mean(),
         "answer_relevancy_mean": df["answer_relevancy"].mean(),
-        "context_precision_mean": df["context_precision"].mean(),
-        "context_recall_mean": df["context_recall"].mean(),
     }

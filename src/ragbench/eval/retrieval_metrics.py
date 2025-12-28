@@ -1,6 +1,6 @@
 """Retrieval evaluation metrics using BEIR framework."""
 
-from typing import Dict, List, Optional
+from typing import Dict, List
 from dataclasses import dataclass
 from beir.retrieval.evaluation import EvaluateRetrieval
 

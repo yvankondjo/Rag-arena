@@ -33,6 +33,7 @@ class RetrievalResult:
     query: str
     retriever_type: str
     latency_ms: float = 0.0
+    reranking_latency_ms: float = 0.0  # Separate reranking latency for fair comparison
 
     @classmethod
     def from_dict(cls, data: dict) -> "RetrievalResult":

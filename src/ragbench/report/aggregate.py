@@ -46,8 +46,6 @@ def load_run_results(run_dir: Path) -> Dict[str, Any]:
 
         "faithfulness": metrics.get("faithfulness"),
         "answer_relevancy": metrics.get("answer_relevancy"),
-        "context_precision": metrics.get("context_precision"),
-        "context_recall": metrics.get("context_recall"),
     }
 
 
@@ -94,6 +92,87 @@ def aggregate_results(results_dir: Path) -> Tuple[pd.DataFrame, pd.DataFrame]:
     })
 
     return results_df, metrics_df
+
+
+def load_query_level_metrics(results_dir: Path) -> pd.DataFrame:
+    """Load query-level metrics from all runs for statistical analysis.
+    
+    FIX #3: Enables proper paired tests on query-level data.
+    
+    Args:
+        results_dir: Directory containing runs/ subdirectory
+        
+    Returns:
+        DataFrame with all query-level metrics
+    """
+    runs_dir = results_dir / "runs"
+    all_metrics = []
+    
+    import yaml
+    
+    for run_dir in runs_dir.iterdir():
+        if not run_dir.is_dir():
+            continue
+        
+        query_metrics_file = run_dir / "query_metrics.jsonl"
+        config_file = run_dir / "config.yaml"
+        
+        if not query_metrics_file.exists():
+            continue
+        
+        # Load config
+        try:
+            with open(config_file) as f:
+                config = yaml.safe_load(f)
+        except Exception:
+            continue
+        
+        # Load query metrics
+        with open(query_metrics_file) as f:
+            for line in f:
+                try:
+                    metric = json.loads(line)
+                    metric["orchestration_mode"] = config.get("orchestration_mode", "unknown")
+                    metric["retrieval_mode"] = config.get("retrieval_mode", "unknown")
+                    metric["use_reranker"] = config.get("use_reranker", False)
+                    all_metrics.append(metric)
+                except json.JSONDecodeError:
+                    continue
+    
+    if not all_metrics:
+        return pd.DataFrame()
+    
+    return pd.DataFrame(all_metrics)
+
+
+def aggregate_with_latency_breakdown(results_dir: Path) -> pd.DataFrame:
+    """Aggregate results with separate latency components.
+    
+    FIX #4: Returns retrieval, reranking, and generation latencies separately.
+    """
+    results_df, _ = aggregate_results(results_dir)
+    query_df = load_query_level_metrics(results_dir)
+    
+    if query_df.empty:
+        return results_df
+    
+    # Compute latency breakdown per config
+    latency_agg = query_df.groupby("config_hash").agg({
+        "retrieval_latency": ["mean", "std"],
+        "reranking_latency": ["mean", "std"],
+        "generation_latency": ["mean", "std"],
+        "total_latency": ["mean", "std"],
+    })
+    
+    # Flatten column names
+    latency_agg.columns = [f"{col[0]}_{col[1]}" for col in latency_agg.columns]
+    latency_agg = latency_agg.reset_index()
+    
+    # Merge with results
+    if "config_hash" in results_df.columns:
+        results_df = results_df.merge(latency_agg, on="config_hash", how="left")
+    
+    return results_df
 
 
 def save_aggregated_results(results_df: pd.DataFrame, output_dir: Path):

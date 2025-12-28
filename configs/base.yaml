@@ -21,3 +21,68 @@ max_agentic_steps: 3
 
 # Model
 model: x-ai/grok-4.1-fast
+
+# =============================================================================
+# Generation Config (MUST be identical for Simple and Agentic RAG)
+# =============================================================================
+generation:
+  temperature: 0.0          # Deterministic for reproducibility
+  max_tokens: 2048
+  
+  # Unified prompts - NO variation between pipelines
+  system_prompt: |
+    You are a helpful scientific assistant. Answer the question based ONLY on the provided context.
+    
+    Rules:
+    1. Use ONLY information from the context to answer
+    2. If the context doesn't contain enough information, say so
+    3. Be concise and precise
+    4. Do not make up information
+
+  user_prompt_template: |
+    Context:
+    {context}
+
+    Question: {question}
+
+    Answer:
+
+# =============================================================================
+# Reranker Config
+# =============================================================================
+reranker:
+  # Backend: "local" | "cohere" | "auto"
+  # - local: CrossEncoder (reproducible, free, slower)
+  # - cohere: Cohere API (faster, costs $, deterministic with rerank-v3.5)
+  # - auto: Cohere if COHERE_API_KEY set, else local
+  backend: cohere
+  
+  # Local CrossEncoder model
+  local_model: cross-encoder/ms-marco-MiniLM-L-6-v2
+  
+  # Cohere config
+  cohere_model: rerank-v4.0-fast
+  cohere_top_n: 10
+
+# =============================================================================
+# Evaluation Config (RAGAS)
+# =============================================================================
+evaluation:
+  ragas_temperature: 0.0    # Must be 0 for reproducibility
+  # RAGAS uses the same model as generation for consistency
+
+# =============================================================================
+# Query Sampling Config
+# =============================================================================
+sampling:
+  strategy: random          # "random" | "stratified" | "all"
+  seed: 42                  # For reproducibility
+
+# =============================================================================
+# Parallelization Config (can be overridden via env vars)
+# =============================================================================
+parallelization:
+  max_concurrent_queries: 5
+  max_concurrent_embeddings: 10
+  max_concurrent_llm_calls: 5
+  max_concurrent_rerank_calls: 10
