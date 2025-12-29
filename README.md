@@ -30,7 +30,7 @@ This repository provides a rigorous benchmark comparing **12 RAG configurations*
 | 11 | agentic/keyword | 0.752 | 0.818 | 0.722 | 0.849 | 0.768 | 12.61s | **0.782** |
 | 12 | simple/keyword | 0.729 | 0.793 | 0.692 | 0.884 | 0.717 | 5.79s | **0.763** |
 
-> **Note**: Latency = temps moyen par requête (retrieval + reranking + generation)
+> **Note**: Latency = average time per query (retrieval + reranking + generation)
 
 ---
 
@@ -147,47 +147,48 @@ This repository provides a rigorous benchmark comparing **12 RAG configurations*
 | **Best Trade-off** | Simple + Hybrid + Rerank |
 
 > **Bottom Line**: For well-formed queries (like SciFact), use **Simple RAG + Reranker**. Agentic RAG adds cost without measurable benefit.
+
 ---
 
-## ⚡ Trade-off Qualité/Latence (Reranker)
+## ⚡ Quality/Latency Trade-off (Reranker)
 
-### Surcoût du Reranker
+### Reranker Overhead
 
-| Métrique | Sans Reranker | Avec Reranker | Δ |
-|----------|---------------|---------------|---|
-| Latence moyenne | **9.76s** | **9.82s** | +0.06s (+0.7%) |
-| NDCG@10 moyen | 0.784 | 0.838 | **+0.054 (+6.9%)** |
-| Temps de reranking | - | 0.29s | - |
+| Metric | Without Reranker | With Reranker | Δ |
+|--------|------------------|---------------|---|
+| Avg Latency | **9.76s** | **9.82s** | +0.06s (+0.7%) |
+| Avg NDCG@10 | 0.784 | 0.838 | **+0.054 (+6.9%)** |
+| Reranking Time | - | 0.29s | - |
 
-> **Verdict**: Le reranker ajoute seulement **+0.06s** (+0.7%) de latence pour un gain de **+6.9% NDCG**. Excellent trade-off !
+> **Verdict**: Reranker adds only **+0.06s** (+0.7%) latency for a **+6.9% NDCG** gain. Excellent trade-off!
 
-### Détail par Configuration
+### Per-Configuration Detail
 
-| Config | Sans Rerank | Avec Rerank | Δ Latence | Δ NDCG | Trade-off |
-|--------|-------------|-------------|-----------|--------|------------|
+| Config | No Rerank | With Rerank | Δ Latency | Δ NDCG | Trade-off |
+|--------|-----------|-------------|-----------|--------|-----------|
 | simple/keyword | 5.79s | 5.88s | +0.09s | +0.083 | **92.86%/s** 🚀 |
 | simple/hybrid | 6.29s | 6.70s | +0.40s | +0.069 | **17.01%/s** |
 | agentic/keyword | 12.61s | 13.15s | +0.54s | +0.072 | **13.24%/s** |
 | agentic/hybrid | 12.74s | 13.53s | +0.79s | +0.064 | **8.12%/s** |
-| simple/dense | 6.93s | 6.55s | -0.38s | +0.030 | ∞ (gratis) |
-| agentic/dense | 14.18s | 13.13s | -1.05s | +0.008 | ∞ (gratis) |
+| simple/dense | 6.93s | 6.55s | -0.38s | +0.030 | ∞ (free) |
+| agentic/dense | 14.18s | 13.13s | -1.05s | +0.008 | ∞ (free) |
 
-> **Trade-off** = % d'amélioration NDCG par seconde de latence ajoutée
+> **Trade-off** = % NDCG improvement per second of added latency
 
-### Observations
+### Key Observations
 
-1. **Keyword + Rerank** : Meilleur trade-off (92%/s pour simple, 13%/s pour agentic)
-2. **Dense + Rerank** : Le reranker améliore sans coût latence (cache/parallélisation)
-3. **Agentic** : ~2× plus lent que Simple (12-14s vs 5-7s) sans gain qualité significatif
+1. **Keyword + Rerank**: Best trade-off (92%/s for simple, 13%/s for agentic)
+2. **Dense + Rerank**: Reranker improves quality with no latency cost (caching/parallelization)
+3. **Agentic**: ~2× slower than Simple (12-14s vs 5-7s) with no significant quality gain
 
-### Recommandation Finale
+### Final Recommendation
 
-| Priorité | Configuration | Latence | NDCG@10 |
-|----------|---------------|---------|--------|
-| 🚀 **Vitesse** | simple/keyword | 5.79s | 0.729 |
+| Priority | Configuration | Latency | NDCG@10 |
+|----------|---------------|---------|---------|
+| 🚀 **Speed** | simple/keyword | 5.79s | 0.729 |
 | ⚖️ **Trade-off** | simple/keyword+rerank | 5.88s | 0.812 |
-| 🎯 **Qualité** | simple/dense+rerank | 6.55s | 0.852 |
-| 🏆 **Max Qualité** | agentic/hybrid+rerank | 13.53s | 0.845 |
+| 🎯 **Quality** | simple/dense+rerank | 6.55s | 0.852 |
+| 🏆 **Max Quality** | agentic/hybrid+rerank | 13.53s | 0.845 |
 ---
 
 ## 🔬 Methodology
