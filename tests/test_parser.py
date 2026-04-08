@@ -1,30 +1,54 @@
-import argparse
-import logging
-import sys
-from pathlib import Path
+import json
+
+import yaml
+
+from ragbench.report.aggregate import aggregate_results
+from ragbench.report.render_md import render_markdown_report
 
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-)
-logger = logging.getLogger(__name__)
+def test_report_generation_from_fixture(tmp_path):
+    """The reporting pipeline should work on a minimal fixture result set."""
+    results_dir = tmp_path / "results"
+    run_dir = results_dir / "runs" / "abc123"
+    run_dir.mkdir(parents=True, exist_ok=True)
 
-def cmd_report(args):
-    """Generate report from benchmark results."""
-    from ragbench.report.aggregate import generate_report
+    with (run_dir / "config.yaml").open("w", encoding="utf-8") as handle:
+        yaml.safe_dump(
+            {
+                "orchestration_mode": "simple",
+                "retrieval_mode": "dense",
+                "use_reranker": False,
+                "dataset": "scifact",
+                "top_k": 10,
+                "max_agentic_steps": 3,
+            },
+            handle,
+            sort_keys=False,
+        )
 
-    generate_report(results_dir=Path(args.results_dir), output_path=Path(args.output))
+    with (run_dir / "metrics.json").open("w", encoding="utf-8") as handle:
+        json.dump(
+            {
+                "successful_queries": 2,
+                "error_count": 0,
+                "num_queries": 2,
+                "elapsed_seconds": 1.5,
+                "avg_time_per_query": 0.75,
+                "ndcg_at_10": 0.8,
+                "recall_at_5": 1.0,
+                "mrr_at_10": 0.9,
+            },
+            handle,
+            indent=2,
+        )
 
-    print(f"✓ Report generated at {args.output}")
+    with (run_dir / "predictions.jsonl").open("w", encoding="utf-8") as handle:
+        handle.write(json.dumps({"query_id": "q1", "response": "answer"}) + "\n")
 
-def main():
-    parser = argparse.ArgumentParser(description="RAG Benchmark CLI")
-    subparser = parser.add_subparsers(dest="command")
-    report_parser = subparser.add_parser("report", help="Generate benchmark report")
-    report_parser.add_argument( 
-        "--results-dir",
-        type=str,
-        required=True,
-        help="Directory containing benchmark results",
-    )
+    results_df, metrics_df = aggregate_results(results_dir)
+    report = render_markdown_report(results_df, metrics_df, results_dir)
+
+    assert len(results_df) == 1
+    assert "RAGBench-12x Benchmark Report" in report
+    assert "simple_dense_no_rerank" in report
+    assert "Successful Runs" in report

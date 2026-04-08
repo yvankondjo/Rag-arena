@@ -4,40 +4,46 @@ import asyncio
 import hashlib
 import json
 import logging
-import random
-import yaml
-from dataclasses import asdict, dataclass, field
-from pathlib import Path
-from typing import Dict, List, Any, Optional
-import time
 import os
+import random
+import time
+from dataclasses import asdict, dataclass
+from pathlib import Path
 from threading import Lock
+from typing import Any, Dict, List
 
-from ragbench.config import AppConfig, RESULTS_DIR, CONFIG_DIR
-from ragbench.index.chromadb_index import ChromaDBIndex
-from ragbench.index.bm25_index import BM25Index
-from ragbench.pipeline.simple_rag import SimpleRAGPipeline
-from ragbench.pipeline.agentic_rag import AgenticRAGGraph
-from ragbench.beir_download import load_beir_queries, load_beir_qrels, load_beir_corpus
+import yaml
+
+from ragbench.config import RESULTS_DIR, AppConfig, load_config_from_yaml
 from ragbench.config_benchmark import (
-    get_benchmark_config,
-    set_benchmark_config,
+    COHERE_RERANK_MODEL,
+    MAX_CONCURRENT_QUERIES,
+    RANDOM_SEED,
+    RERANKER_BACKEND,
+    RERANKER_MODEL,
     BenchmarkConfig,
     QueryLevelMetrics,
-    RERANKER_MODEL,
-    RERANKER_BACKEND,
-    COHERE_RERANK_MODEL,
-    COHERE_TOP_N,
-    USE_LOCAL_RERANKER_ONLY,
-    RANDOM_SEED,
-    MAX_CONCURRENT_QUERIES,
-    MAX_CONCURRENT_LLM_CALLS,
+    set_benchmark_config,
 )
 
 logger = logging.getLogger(__name__)
 
 # Global lock for index access (thread-safety)
 _index_lock = Lock()
+
+
+def load_beir_queries(dataset_path: Path):
+    """Load BEIR queries lazily so tests can monkeypatch this helper."""
+    from ragbench.beir_download import load_beir_queries as _load_beir_queries
+
+    return _load_beir_queries(dataset_path)
+
+
+def load_beir_qrels(dataset_path: Path):
+    """Load BEIR qrels lazily so tests can monkeypatch this helper."""
+    from ragbench.beir_download import load_beir_qrels as _load_beir_qrels
+
+    return _load_beir_qrels(dataset_path)
 
 
 def _serialize_messages(messages: List[Any]) -> List[dict]:
@@ -88,43 +94,35 @@ class RAGConfig:
     def to_dict(self):
         return asdict(self)
 
+    def get_run_name(self) -> str:
+        """Return a stable human-readable name for the run."""
+        reranker = "rerank" if self.use_reranker else "no_rerank"
+        return f"{self.orchestration_mode}_{self.retrieval_mode}_{reranker}"
+
 
 def get_all_configs() -> List[RAGConfig]:
     """Generate all configurations from axes.yaml and base.yaml."""
-    base_config_path = CONFIG_DIR / "base.yaml"
-    axes_config_path = CONFIG_DIR / "axes.yaml"
-
-    with open(base_config_path, 'r') as f:
-        base_config = yaml.safe_load(f)
-
-    with open(axes_config_path, 'r') as f:
-        axes_config = yaml.safe_load(f)
-
-    orch_modes = axes_config["orchestration"]["modes"]
-    retrieval_modes = axes_config["retrieval"]["modes"]
-    reranker_modes = axes_config["reranker"]["modes"]
-    reranker_modes = [mode == "rerank" for mode in reranker_modes]
-
     configs = []
-    for orch in orch_modes:
-        for retrieval in retrieval_modes:
-            for use_reranker in reranker_modes:
-                configs.append(
-                    RAGConfig(
-                        orchestration_mode=orch,
-                        retrieval_mode=retrieval,
-                        use_reranker=use_reranker,
-                        dataset=base_config.get("dataset_name", "scifact"),
-                        model=base_config.get("model", "gpt-4o-mini"),
-                        top_k=base_config.get("top_k", 10),
-                        max_agentic_steps=base_config.get("max_agentic_steps", 3),
-                    )
-                )
+    for parsed in load_config_from_yaml():
+        configs.append(
+            RAGConfig(
+                orchestration_mode=parsed.orchestration_mode,
+                retrieval_mode=parsed.retrieval_mode,
+                use_reranker=parsed.use_reranker,
+                dataset=parsed.dataset,
+                model=parsed.model,
+                top_k=parsed.top_k,
+                max_agentic_steps=parsed.max_agentic_steps,
+            )
+        )
     return configs
 
 
 def load_indexes(config: RAGConfig) -> tuple:
     """Load Chroma + BM25 indexes for config (thread-safe)."""
+    from ragbench.index.bm25_index import BM25Index
+    from ragbench.index.chromadb_index import ChromaDBIndex
+
     with _index_lock:
         app_config = AppConfig()
         collection_name = f"{config.dataset}_doclevel"
@@ -286,6 +284,8 @@ async def run_single_config(
                 reranker = create_reranker()
             
             if config.orchestration_mode == "simple":
+                from ragbench.pipeline.simple_rag import SimpleRAGPipeline
+
                 pipeline = SimpleRAGPipeline(
                     chroma_index=chroma_index,
                     embedding_client=embedding_client,
@@ -296,6 +296,8 @@ async def run_single_config(
                     top_k=config.top_k,
                 )
             else:
+                from ragbench.pipeline.agentic_rag import AgenticRAGGraph
+
                 pipeline = AgenticRAGGraph(
                     model=config.model,
                     chroma_index=chroma_index,

@@ -74,5 +74,7 @@ htmlcov/
 .ipynb_checkpoints/
 *.ipynb
 /data
-.github/
+.github/*
+!.github/workflows/
+!.github/workflows/ci.yml
 .clinerules/

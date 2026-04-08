@@ -1,16 +1,16 @@
 """Aggregate benchmark results from multiple runs."""
 
-from pathlib import Path
-from typing import Dict, List, Tuple, Any
 import json
-import pandas as pd
 from glob import glob
+from pathlib import Path
+from typing import Any, Dict, Tuple
+
+import pandas as pd
 
 
 def load_run_results(run_dir: Path) -> Dict[str, Any]:
     """Load results from a single run directory."""
     config_file = run_dir / "config.yaml"
-    predictions_file = run_dir / "predictions.jsonl"
     metrics_file = run_dir / "metrics.json"
 
 

@@ -2,11 +2,7 @@
 
 import argparse
 import logging
-import sys
 from pathlib import Path
-
-from ragbench.beir_download import BEIRDownloader, load_beir_corpus, load_beir_queries, load_beir_qrels
-from ragbench.build_indexes import build_indexes
 
 logging.basicConfig(
     level=logging.INFO,
@@ -17,7 +13,14 @@ logger = logging.getLogger(__name__)
 
 def cmd_download(args):
     """Download BEIR dataset."""
+    from ragbench.beir_download import (
+        BEIRDownloader,
+        load_beir_corpus,
+        load_beir_qrels,
+        load_beir_queries,
+    )
     from ragbench.config import AppConfig
+
     config = AppConfig()
 
     downloader = BEIRDownloader(config.raw_data_dir)
@@ -35,6 +38,8 @@ def cmd_download(args):
 
 def cmd_index(args):
     """Build indexes (Chroma + BM25) - doc-level."""
+    from ragbench.build_indexes import build_indexes
+
     result = build_indexes(dataset_name=args.dataset)
 
     print(f"✓ Indexes built for {args.dataset} (doc-level)")
@@ -56,7 +61,7 @@ def cmd_benchmark(args):
     )
 
     if results:
-        print(f"✓ Benchmark completed")
+        print("✓ Benchmark completed")
         print(f"  - Results: {len(results)} configurations")
 
 

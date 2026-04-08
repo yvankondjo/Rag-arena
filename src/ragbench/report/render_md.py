@@ -1,9 +1,9 @@
 """Render benchmark results to Markdown report."""
 
-from pathlib import Path
-from typing import Dict, Any
-import pandas as pd
 from datetime import datetime
+from pathlib import Path
+
+import pandas as pd
 
 
 def render_markdown_report(results_df: pd.DataFrame, metrics_df: pd.DataFrame, results_dir: Path) -> str:
@@ -100,7 +100,10 @@ def render_markdown_report(results_df: pd.DataFrame, metrics_df: pd.DataFrame, r
         reranker_str = "rerank" if row['use_reranker'] else "no_rerank"
         config = f"{row['orchestration_mode']}_{row['retrieval_mode']}_{reranker_str}"
         report_lines.append(
-            f"| {row['config_hash'][:8]} | {config} | {row['elapsed_seconds']:.1f}s | {row['num_queries']} | {row['success_count']} | {row['error_count']} |"
+            (
+                f"| {row['config_hash'][:8]} | {config} | {row['elapsed_seconds']:.1f}s | "
+                f"{row['num_queries']} | {row['success_count']} | {row['error_count']} |"
+            )
         )
 
     report_lines.extend([
